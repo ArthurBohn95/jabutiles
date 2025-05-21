@@ -50,7 +50,7 @@ class Tile:
             display(self.image) # type: ignore
         
         finally:
-            return f"size:{self.size} mode:{self.mode} shape:{self.shape}"
+            print(f"size:{self.size} mode:{self.mode}")
     
     # PROPERTIES # -------------------------------------------------------------
     @property
@@ -66,16 +66,16 @@ class Tile:
         size = self.size
         return size[0]/2, size[1]/2
     
-    @property
-    def as_mask(self) -> "Mask":
-        """Converts the Tile to a Mask (only L channel).
-        Useful to ensure a mask is indeed a mask.
+    # @property
+    # def as_mask(self) -> "Mask":
+    #     """Converts the Tile to a Mask (only L channel).
+    #     Useful to ensure a mask is indeed a mask.
         
-        Returns:
-            Mask: The converted Tile to Mask.
-        """
+    #     Returns:
+    #         Mask: The converted Tile to Mask.
+    #     """
         
-        return Mask(self.image.convert('L'))
+    #     return Mask(self.image.convert('L'))
     
     @property
     def as_array(self) -> np.typing.NDArray:
@@ -370,23 +370,5 @@ class Tile:
             base_shaded = base_adjusted.overlay(self, offset_mask)
         
         return base_shaded
-
-
-
-class Mask(Tile):
-    def __init__(self,
-            ref: str | Image.Image | np.typing.NDArray = None,
-            shape: Shapes = None,
-            edges: str = None,
-        ) -> None:
-        super().__init__(ref, shape)
-        
-        self.edges = edges
-    
-    
-    
-    
-    pass
-
 
 
