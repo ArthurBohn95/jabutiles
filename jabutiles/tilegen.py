@@ -6,7 +6,7 @@ from typing import Any, Literal, Sequence
 from PIL import Image, ImageOps, ImageDraw, ImageFilter, ImageEnhance
 import numpy as np
 
-from jabutiles.tile import Tile
+from jabutiles.tile_old import Tile
 from jabutiles.utils import snap
 from jabutiles.configs import Shapes
 from jabutiles.tileops import TileOps
@@ -213,14 +213,14 @@ class TileGen:
         ```
         size = (10, 10)
         blobs = [
-            ((cx, cy), (w, h)), # for ellipses
-            ((cx, cy), r),      # for circles
+            ((cx, cy), (rx, ry)), # for ellipses
+            ((cx, cy), r),        # for circles
             ...
         ]
         # center x and y
-        # w.idth
-        # h.eight
-        # r.adius
+        # r = radius
+        # rx = radius on x axis (width/2)
+        # ry = radius on y axis (height/2)
         ```
         """
         
@@ -237,7 +237,7 @@ class TileGen:
             if isinstance(args, tuple):
                 x, y = pos
                 w, h = args
-                canvas.ellipse((x-w/2, y-h/2, x+w/2, y+h/2), FILL_VALUE)
+                canvas.ellipse((x-w, y-h, x+w, y+h), FILL_VALUE)
             else:
                 canvas.circle(pos, args, FILL_VALUE)
         

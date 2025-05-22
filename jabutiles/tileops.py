@@ -2,7 +2,7 @@
 
 from PIL import Image, ImageDraw, ImageOps, ImageEnhance
 
-from jabutiles.tile import Tile
+from jabutiles.tile_old import Tile
 from jabutiles.utils import combine_choices, snap
 
 
