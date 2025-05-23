@@ -6,17 +6,17 @@ from typing import Any, Literal, Sequence
 from PIL import Image, ImageOps, ImageDraw, ImageFilter, ImageEnhance
 import numpy as np
 
-from jabutiles.tile_old import Tile
+from jabutiles.mask import Mask
 from jabutiles.utils import snap
 from jabutiles.configs import Shapes
-from jabutiles.tileops import TileOps
+from jabutiles.texture import Texture
 
 
 
 class TileGen:
     # MASK GENERATORS # --------------------------------------------------------
     @staticmethod
-    def gen_ort_mask(size: int | tuple[int, int], **kwargs) -> Tile:
+    def gen_ort_mask(size: int | tuple[int, int], **params) -> Mask:
         """ Generates an orthogonal mask Tile given the size. """
         
         if isinstance(size, int):
@@ -24,10 +24,10 @@ class TileGen:
         
         mask_image = Image.new('L', size, 255)
         
-        return Tile(mask_image)
+        return Mask(mask_image)
     
     @staticmethod
-    def gen_iso_mask(size: int | tuple[int, int], **kwargs) -> Tile:
+    def gen_iso_mask(size: int | tuple[int, int], **params) -> Mask:
         """Generates an isometric mask Tile given the size.
         """
         
@@ -41,18 +41,17 @@ class TileGen:
             ((0, H/2-1), (W/2-1, 0)), # top-left diagonal
         ]
         
-        outline = TileOps.create_symmetrical_outline((W, H), lines, **kwargs)
-        mask_image = TileOps.create_mask_from_outline(outline)
+        image = Mask._create_symmetrical_outline((W, H), lines, **params)
         
-        return Tile(mask_image, 'iso')
+        return Mask(image, 'iso')
     
     @staticmethod
     def gen_hex_mask(
             size: int | tuple[int, int],
             top: Literal["flat", "point"] = "flat",
             grain: int = 4,
-            **kwargs
-        ) -> Tile:
+            **params
+        ) -> Mask:
         
         if isinstance(size, int):
             assert size % 2 == 0, "Size must be even numbered"
@@ -62,14 +61,14 @@ class TileGen:
         
         
         # It's easier to always create as a flat top and rotate later
-        width, height = size
+        W, H = size
         
         # Markers (Q.uarter, M.iddle)
-        QW, MW = width/4, width/2
-        QH, MH = height/4, height/2
+        QW, MW = W/4, W/2
+        QH, MH = H/4, H/2
         
         # Small correction for widths 8 and 12 (outliers)
-        if width in (8, 12):
+        if W in (8, 12):
             QW += 0.5
         
         lines = [
@@ -77,20 +76,19 @@ class TileGen:
             ((QW+0.5, 0.5), (MW, 0.5)), # top line
         ]
         
-        outline = TileOps.create_symmetrical_outline((width, height), lines, **kwargs)
-        mask_image = TileOps.create_mask_from_outline(outline)
+        image = Mask._create_symmetrical_outline((W, H), lines, **params)
         
         if top == 'point':
-            mask_image = mask_image.rotate(90, expand=True)
+            image = image.rotate(90, expand=True)
         
-        return Tile(mask_image, f'hex.{top}')
+        return Mask(image, f'hex.{top}')
     
     @staticmethod
     def gen_shape_mask(
             size: int | tuple[int, int],
             shape: Shapes,
             **params: dict[str, Any],
-        ) -> Tile:
+        ) -> Mask:
         
         if '.' in shape:
             shape, sdev = shape.split('.')
@@ -106,77 +104,94 @@ class TileGen:
                 return TileGen.gen_hex_mask(size, sdev, **params)
             
             case _:
-                return Tile(None)
+                return Mask(None)
     
     @staticmethod
     def gen_brick_pattern_mask(
-            size: tuple[int, int],
-            brick_size: tuple[int, int],
-            gap_width: int = 0,
-            edge_width: int = 0,
-            base_value: int = 0,
-            fill_value: int = 255,
+            mask_size: int | tuple[int, int],
+            brick_size: int | tuple[int, int],
+            gap_size: int | tuple[int, int] = 1,
+            edge_size: int = 0,
             row_offset: int = None,
             invert: bool = True,
-            **params: dict[str, Any],
-        ) -> Tile:
-        """Works with:
-        ```
-        gap_width  | 1 | 2 | 3 | 4 | 5 | 6 | ...
-        edge_width | * | * | * | X | * | ? | ...
-        ```
+            **params: dict,
+        ) -> Mask:
+        """
         """
         
-        MW, MH = size       # Mask Width and Height
+        # Parameters setup
+        DEBUG: bool = params.get("debug", False)
+        
+        fval: int = 255 if not DEBUG else 127
+        
+        if isinstance(mask_size, int) : mask_size  = (mask_size, mask_size)
+        if isinstance(brick_size, int): brick_size = (brick_size, brick_size)
+        if isinstance(gap_size, int)  : gap_size   = (gap_size, gap_size)
+        
+        # Constants
+        MW, MH = mask_size  # Mask Width and Height
         BW, BH = brick_size # Brick Width and Height
-        BRW = MW + 2*BW     # Brick Row Width
+        GW, GH = gap_size   # Gap Width and Height
+        
+        BTW = BW + GW       # Brick Template Width
+        BTH = BH + GH       # Brick Template Height
+        BRW = MW + 2*(BW+GW)# Brick Row Width
+        BRH = BH + GH       # Brick Row Height
+        
         HBW = BW//2         # Half Brick Width
-        if row_offset is None:
-            row_offset = HBW
+        if row_offset is None: row_offset = HBW
+        else:                  row_offset %= BTW
         
-        brick_template = Image.new('L', brick_size, base_value)
-        brick_temp_canv = ImageDraw.Draw(brick_template)
-        brick_temp_canv.line(((0.5, 0.5), (BW+0.5, 0.5)), fill_value, gap_width)
-        brick_temp_canv.line(((HBW+0.5, 0.5), (HBW+0.5, BH+0.5)), fill_value, gap_width)
+        GOX = (GW - 0.5) // 2   # Gap Offset on x-axis
+        GOY = (GH - 0.5) // 2   # Gap Offset on y-axis
         
-        # Some fuckery, don't mess with it
-        if edge_width:
-            CO = gap_width / 2 if gap_width % 2 == 0 else 0.5 * gap_width
-            polyconf = dict(n_sides=4, rotation=45, fill=fill_value)
+        
+        # Creates the single brick template
+        brick_template = Image.new('L', (BTW, BTH), 0)
+        brick_canvas = ImageDraw.Draw(brick_template)
+        
+        # Draws the gaps
+        brick_canvas.line(((0.5, GOY), (BRW+0.5, GOY)), fval, GH)
+        brick_canvas.line(((GOX+HBW, 0.5), (GOX+HBW, BRH+0.5)), fval, GW)
+        
+        # Adds the rounded edges
+        if edge_size:
+            radius = edge_size + 1
+            polyconf = dict(n_sides=4, rotation=45, fill=255)
             
-            rad = edge_width + gap_width
-            brick_temp_canv.regular_polygon((HBW+0.5, 0.5, rad), **polyconf)
-            brick_temp_canv.regular_polygon((HBW+0.5, BH+CO, rad), **polyconf)
+            # Adds the top-left corner
+            brick_canvas.regular_polygon((HBW, GH-1, radius), **polyconf)
+            # Adds the top-right corner
+            brick_canvas.regular_polygon((HBW+GW-1, GH-1, radius), **polyconf)
             
-            if gap_width % 2 == 0:
-                brick_temp_canv.regular_polygon((HBW+CO+0.5, 0.5, rad), **polyconf)
-                brick_temp_canv.regular_polygon((HBW+CO+0.5, BH+CO+0.5, rad), **polyconf)
+            # Flips the corners top-bottom and pastes them back
+            flipped = ImageOps.flip(brick_template)
+            brick_template.paste(flipped, (0, GH), flipped)
         
-        # Builds the single brick row with the single brick template
-        brick_row = Image.new('L', (BRW, BH), base_value)
-        for col in range(0, BRW, BW):
+        # Generates the long brick row
+        brick_row = Image.new('L', (BRW, BRH), 0)
+        for col in range(0, BRW, BTW):
             brick_row.paste(brick_template, (col, 0))
         
-        # Pastes the brick row template on each new row
-        # The offset can be overriden with `row_offset=<int>`
-        mask_image  = Image.new("L", size, base_value)
+        # Pastes the brick rows with offsets
+        image = Image.new('L', mask_size, 0)
+        for cnt, row in enumerate(range(0, MH, BRH)):
+            offset = ((cnt % 2) * row_offset) - (HBW + BTW)
+            image.paste(brick_row, (offset, row))
         
-        for cnt, row in enumerate(range(0, MH, BH)):
-            offset = (cnt % 2) * row_offset - (HBW + BW)
-            
-            mask_image.paste(brick_row, (offset, row))
-        
+        # Images are generated with 1s on 0s, so must be inverted
         if invert:
-            mask_image = ImageOps.invert(mask_image)
+            image = ImageOps.invert(image)
         
-        return Tile(mask_image)
+        return Mask(image)
+    
     
     @staticmethod
     def gen_line_draw_mask(
             size: tuple[int, int],
             lines: Sequence[tuple[float, float, float, float]],
             **params: dict[str, Any],
-        ) -> Tile:
+        ) -> Mask:
         """
         ```
         size = (10, 10)
@@ -201,14 +216,14 @@ class TileGen:
         if INVERT:
             mask_image = ImageOps.invert(mask_image)
         
-        return Tile(mask_image)
+        return Mask(mask_image)
     
     @staticmethod
     def gen_blobs_mask(
             size: tuple[int, int],
             blobs: Sequence[tuple[tuple[float, float], tuple[float, float]]],
             **params: dict[str, Any],
-        ) -> Tile:
+        ) -> Mask:
         """
         ```
         size = (10, 10)
@@ -244,7 +259,7 @@ class TileGen:
         if INVERT:
             mask_image = ImageOps.invert(mask_image)
         
-        return Tile(mask_image)
+        return Mask(mask_image)
     
     
     # TEXTURE GENERATORS # -----------------------------------------------------
@@ -253,7 +268,7 @@ class TileGen:
             size: tuple[int, int],
             ranges: list[tuple[int, int]],
             mode: Literal['minmax', 'avgdev'] = 'minmax',
-        ) -> Tile:
+        ) -> Texture:
         """ Generates a random RGB Tile from the channels ranges. """
         
         size = size[1], size[0]
@@ -278,26 +293,26 @@ class TileGen:
                 'RGB')
             )
         
-        return Tile(image)
+        return Texture(image)
     
     @staticmethod
     def gen_random_mask(
             size: tuple[int, int],
             vrange: tuple[int, int],
-        ) -> Tile:
+        ) -> Mask:
         """ Generates a random Mask Tile"""
         
         image = Image.fromarray(np.stack(
             np.random.randint(vrange[0], vrange[1], size, dtype=np.uint8), axis=-1), 'L')
         
-        return Tile(image)
+        return Mask(image)
     
     @staticmethod
     def gen_texture_tile(
             size: int | tuple[int, int],
             texture_name: str,
-            **kwargs,
-        ) -> Tile:
+            **params,
+        ) -> Texture:
         
         if isinstance(size, int):
             size = (size, size)
@@ -307,90 +322,88 @@ class TileGen:
         HALF_WIDTH = size[0]//2, size[1]
         QUARTER_HEIGHT = size[0], size[1]//4
         
-        tile: Tile = None
+        texture: Texture = None
         
         match texture_name.lower():
             case 'grass':
-                tile = (TileGen
+                texture = (TileGen
                     .gen_random_rgb(FULL_SIZE, ((48, 64), (64, 108), (24, 32)))
                     .filter([ImageFilter.SMOOTH_MORE])
-                    .enhance(ImageEnhance.Color, 0.9)
+                    .color(0.9)
                 )
             case 'grass.dry': # path
-                tile = (TileGen
+                texture = (TileGen
                     .gen_random_rgb(FULL_SIZE, ((80, 8), (80, 8), (24, 4)), 'avgdev')
                     .filter([ImageFilter.SMOOTH_MORE])
-                    .enhance(ImageEnhance.Color, 0.66)
+                    .color(0.66)
                 )
             case 'grass.wet': # moss
-                tile = (TileGen
+                texture = (TileGen
                     .gen_random_rgb(FULL_SIZE, ((48, 4), (64, 4), (24, 4)), 'avgdev')
-                    #.filter([ImageFilter.SMOOTH_MORE])
                 )
             
             case 'water':
-                tile = (TileGen
+                texture = (TileGen
                     .gen_random_rgb(HALF_WIDTH, ((24, 32), (32, 48), (80, 120)))
                     .scale((2, 1))
                     .filter([ImageFilter.SMOOTH, ImageFilter.SMOOTH])
                 )
             case 'water.shallow': # puddle
-                tile = (TileGen
+                texture = (TileGen
                     .gen_random_rgb(FULL_SIZE, ((64, 8), (72, 8), (120, 12)), 'avgdev')
                     .filter([ImageFilter.SMOOTH, ImageFilter.SMOOTH])
                 )
             
             case 'dirt':
-                tile = (TileGen
+                texture = (TileGen
                     .gen_random_rgb(FULL_SIZE, ((140, 160), (100, 120), (64, 80)))
                     .filter([ImageFilter.SMOOTH_MORE])
                 )
             case 'dirt.wet': # mud
-                tile = (TileGen
+                texture = (TileGen
                     .gen_random_rgb(FULL_SIZE, ((100, 6), (72, 6), (56, 4)), 'avgdev')
                     .filter([ImageFilter.SMOOTH])
                 )
             
             case 'sand':
-                tile = (TileGen
+                texture = (TileGen
                     .gen_random_rgb(FULL_SIZE, ((240, 255), (200, 220), (180, 192)))
                     .filter([ImageFilter.SMOOTH])
-                    # .enhance(ImageEnhance.Color, 0.2)
                 )
             case 'clay':
-                tile = (TileGen
+                texture = (TileGen
                     .gen_random_rgb(FULL_SIZE, ((108, 120), (64, 80), (48, 64)))
                     .filter([ImageFilter.SMOOTH_MORE])
                 )
             
             case 'stone':
-                tile = (TileGen
+                texture = (TileGen
                     .gen_random_rgb(HALF_SIZE, ((100, 112), (100, 112), (100, 112)))
                     .scale(2, Image.Resampling.NEAREST)
-                    .enhance(ImageEnhance.Color, 0.2)
+                    .color(0.2)
                 )
             case 'stone.raw':
-                tile = (TileGen
+                texture = (TileGen
                     .gen_random_rgb(FULL_SIZE, ((96, 48), (96, 48), (96, 12)), 'avgdev')
                     .filter([ImageFilter.SMOOTH_MORE])
-                    .enhance(ImageEnhance.Color, 0.05)
+                    .color(0.05)
                 )
             
             case 'wood':
-                tile = (TileGen
+                texture = (TileGen
                     .gen_random_rgb(QUARTER_HEIGHT, ((80, 8), (32, 6), (16, 4)), 'avgdev')
                     .scale((1, 4))
                     .filter([ImageFilter.BLUR])
-                    .enhance(ImageEnhance.Contrast, 0.666)
-                    .enhance(ImageEnhance.Color, 0.75)         # 0.666
-                    .enhance(ImageEnhance.Brightness, 1.1)    # 1.333
+                    .contrast(0.666)
+                    .color(0.75)        # 0.666
+                    .brightness(1.1)    # 1.333  
                 )
             
             # case '':
             #     return
             
             case _:
-                tile = Tile()
+                texture = Texture()
         
-        return tile
+        return texture
 

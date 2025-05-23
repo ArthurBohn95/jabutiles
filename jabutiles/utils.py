@@ -145,3 +145,8 @@ def combine_choices(choice1: str, choice2: str) -> str:
             choice.append('.')
     
     return ''.join(choice)
+
+from PIL import Image, ImageOps
+
+def display_image(img: Image.Image, scale: float = 10) -> None:
+    display(ImageOps.scale(img, scale, Image.Resampling.NEAREST)) # type: ignore

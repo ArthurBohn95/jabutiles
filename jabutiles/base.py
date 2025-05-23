@@ -1,4 +1,5 @@
 from typing import TypeVar, Generic, Literal
+import random as rnd
 
 import numpy as np
 from PIL import Image, ImageOps, ImageDraw, ImageChops, ImageFilter, ImageEnhance
@@ -208,6 +209,59 @@ class BaseImage(Generic[B]):
             
             return self.copy_with_params(base_image)
     
+    def bleed(self,
+            pad: int = 0,
+        ) -> B:
+        """A special type of padding, where the edge pixels are repeated"""
+        
+        array = self.as_array
+        
+        # Determine padding shape
+        if array.ndim == 2:  # Grayscale 'L'
+            pad_width = ((pad, pad), (pad, pad))
+        elif array.ndim == 3:  # 'RGB', 'RGBA', or 'LA'
+            pad_width = ((pad, pad), (pad, pad), (0, 0))
+        
+        padded = np.pad(array, pad_width, mode='edge')
+        image = Image.fromarray(padded, mode=self.mode)
+        
+        return self.copy_with_params(image)
+    
+    
+    def smooth(self,
+            level: int = 1,
+            wrap: bool = True,
+            pad: int = 4,
+        ) -> B:
+        
+        FILTERS = {
+            -1: ImageFilter.SHARPEN,
+            1: ImageFilter.SMOOTH,
+            2: ImageFilter.SMOOTH_MORE,
+            3: ImageFilter.BLUR,
+        }
+        
+        if level not in FILTERS:
+            return self
+        
+        w, h = self.size
+        
+        if wrap:
+            # Pads the image with itself to avoid filter bleeding
+            image = self.take((w-pad, h-pad), (w+pad*2, h+pad*2)).image
+        
+        else:
+            # Pads the image with edge repetition
+            image = self.bleed(pad).image
+        
+        # Applies the filter
+        image = image.filter(FILTERS[level])
+        
+        # Crops the extra border, restoring the original size
+        image = ImageOps.crop(image, pad)
+        
+        return self.copy_with_params(image)
+    
     def filter(self,
             filters: ImageFilter.Filter | list[ImageFilter.Filter],
             pad: int = 4,
@@ -232,9 +286,15 @@ class BaseImage(Generic[B]):
             thickness: float = 1.0,
             color: str | tuple[int, int, int] = "white",
             combine: bool = True,
+            dist: float = 1.0,
         ) -> B:
         
+        # TODO: Improve this for textures and masks
         ref_image = self.image.convert("RGBA")
+        
+        if self.image.mode in ('L', 'LA'):
+            ref_image.putalpha(self.image)
+        
         base_image = Image.new(ref_image.mode, ref_image.size, (0, 0, 0, 0))
         canvas = ImageDraw.Draw(base_image)
         
@@ -246,6 +306,9 @@ class BaseImage(Generic[B]):
         for x in range(W):
             for y in range(H):
                 if not edge[x,y][3]:
+                    continue
+                
+                if dist < rnd.random():
                     continue
                 
                 if T % 1 == 0: # 1, 2, 3, ...round corners
@@ -263,3 +326,4 @@ class BaseImage(Generic[B]):
         
         return self.copy_with_params(base_image)
     
+

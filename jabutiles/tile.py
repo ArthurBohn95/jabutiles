@@ -87,39 +87,3 @@ class Tile(Texture):
         # print(f"Mask.copy_with_params:\n{params=}")
         return self._builder(image, **params)
     
-    # IMAGE OPERATIONS
-    def overlay(self,
-            head: "Tile",
-            mask: "Mask" = None,
-            alpha: float = 0.5,
-        ) -> "Tile":
-        # TODO: review
-        """Merges two tiles into a new one.
-        Must have a MASK or alpha value (default, 0.5).
-        
-        If using a MASK, it must have the same dimensions as both DATA Tiles.
-        The pixel values from the MASK range from 0 (full base) to 255 (full head).
-        
-        The alpha value is used if no MASK is present.
-        Its value is applied to the Tiles as a whole, not by pixel.
-        
-        Args:
-            base (Tile): The Tile that goes on the bottom.
-            head (Tile): The Tile that goes on top.
-            mask (Tile, optional): A special Tile that controls how each pixel is merged. Defaults to None.
-            alpha (float, optional): A value that controls how all pixels are merged. Defaults to 0.5.
-        
-        Returns:
-            Tile: A new Tile resulting from the combination of both Tiles.
-        """
-        
-        if mask is None:
-            image = Image.blend(self.image, head.image, alpha)
-            shape = self.shape
-        
-        else:
-            image = Image.composite(head.image, self.image, mask.image)
-            shape = mask.shape
-        
-        return Tile(image, shape)
-    

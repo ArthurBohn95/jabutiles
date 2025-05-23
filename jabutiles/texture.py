@@ -66,6 +66,58 @@ class Texture(BaseImage["Texture"]):
         
         return self.copy_with_params(image)
     
+    # TODO: review
+    def overlay(self,
+            head: "Texture",
+            mask: "Mask" = None,
+            alpha: float = 0.5,
+        ) -> "Texture":
+        """Merges two tiles into a new one.
+        Must have a MASK or alpha value (default, 0.5).
+        
+        If using a MASK, it must have the same dimensions as both DATA Tiles.
+        The pixel values from the MASK range from 0 (full base) to 255 (full head).
+        
+        The alpha value is used if no MASK is present.
+        Its value is applied to the Tiles as a whole, not by pixel.
+        
+        Args:
+            base (Tile): The Tile that goes on the bottom.
+            head (Tile): The Tile that goes on top.
+            mask (Tile, optional): A special Tile that controls how each pixel is merged. Defaults to None.
+            alpha (float, optional): A value that controls how all pixels are merged. Defaults to 0.5.
+        
+        Returns:
+            Tile: A new Tile resulting from the combination of both Tiles.
+        """
+        
+        if mask is None:
+            image = Image.blend(self.image, head.image, alpha)
+        
+        else:
+            image = Image.composite(head.image, self.image, mask.image)
+        
+        return self.copy_with_params(image)
+    
+    def shade(self,
+            mask: "Mask",
+            offset: tuple[int, int],
+            brightness: float = 1.0,
+            inverted: bool = False,
+            wrapped: bool = True,
+        ) -> "Tile":
+        
+        offset_mask = mask.offset(offset, wrapped).invert()
+        base_adjusted = self.brightness(brightness)
+        
+        if inverted: # inverts which is overlaid on the other for double shades
+            base_shaded = self.overlay(base_adjusted, offset_mask)
+        else:
+            base_shaded = base_adjusted.overlay(self, offset_mask)
+        
+        return base_shaded
+    
+    # OUTPUTS
     def cutout(self,
             mask: "Mask",
         ) -> "Tile":
@@ -78,6 +130,7 @@ class Texture(BaseImage["Texture"]):
         image.putalpha(mask.image)
         
         return Tile(image, mask.shape)
+    
 
 
 

@@ -105,6 +105,19 @@ class Mask(BaseImage["Mask"]):
         
         return self.copy_with_params(image)
     
+    # OUTPUTS
+    # FIXME: Should inherit somewhat
+    def cutout(self,
+            mask: "Mask",
+        ) -> "Mask":
+        """Think of 'cutout' as in 'cookie cutter'.  
+        Cuts a Texture to generate a Tile.
+        """
+        
+        image = self.image.copy()
+        image.putalpha(mask.image)
+        
+        return self.copy_with_params(image)
 
 
 
