@@ -15,7 +15,7 @@ class Texture(BaseImage["Texture"]):
     
     # DUNDERS # ----------------------------------------------------------------
     def __init__(self,
-            image: str | Image.Image | np.typing.NDArray = None,
+            image: str | Image.Image | np.typing.NDArray,
             **params,
         ) -> None:
         
@@ -23,7 +23,7 @@ class Texture(BaseImage["Texture"]):
         super().__init__(image, **params)
         
         # Ensures all textures are full channel
-        self.image = self.image.convert('RGBA')
+        self._image: Image.Image = self._image.convert('RGBA')
         
         # print("Texture.__init__")
     
@@ -46,7 +46,7 @@ class Texture(BaseImage["Texture"]):
         if factor == 1.0:
             return self
         
-        image = ImageEnhance.Brightness(self.image).enhance(factor)
+        image = ImageEnhance.Brightness(self._image).enhance(factor)
         
         return self.copy_with_params(image)
     
@@ -54,7 +54,7 @@ class Texture(BaseImage["Texture"]):
         if factor == 1.0:
             return self
         
-        image = ImageEnhance.Color(self.image).enhance(factor)
+        image = ImageEnhance.Color(self._image).enhance(factor)
         
         return self.copy_with_params(image)
     
@@ -62,7 +62,7 @@ class Texture(BaseImage["Texture"]):
         if factor == 1.0:
             return self
         
-        image = ImageEnhance.Contrast(self.image).enhance(factor)
+        image = ImageEnhance.Contrast(self._image).enhance(factor)
         
         return self.copy_with_params(image)
     
@@ -92,10 +92,10 @@ class Texture(BaseImage["Texture"]):
         """
         
         if mask is None:
-            image = Image.blend(self.image, head.image, alpha)
+            image = Image.blend(self._image, head.image, alpha)
         
         else:
-            image = Image.composite(head.image, self.image, mask.image)
+            image = Image.composite(head.image, self._image, mask.image)
         
         return self.copy_with_params(image)
     
@@ -121,15 +121,14 @@ class Texture(BaseImage["Texture"]):
     def cutout(self,
             mask: "Mask",
         ) -> "Tile":
-        """Think of 'cutout' as in 'cookie cutter'.  
-        Cuts a Texture to generate a Tile.
+        """Cuts a Texture to generate a Tile.
+        
+        Always returns a Tile.
         """
+        
         from jabutiles.tile import Tile
         
-        image = self.image.copy()
-        image.putalpha(mask.image)
-        
-        return Tile(image, mask.shape)
+        return Tile(self._image.copy(), mask)
     
 
 

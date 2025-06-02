@@ -15,8 +15,8 @@ class Mask(BaseImage["Mask"]):
     # DUNDERS # ----------------------------------------------------------------
     def __init__(self,
             image: str | Image.Image | np.typing.NDArray = None,
-            shape: Shapes = None,
-            edges: str = None,
+            # shape: Shapes = None,
+            # edges: str = None,
             **params,
         ) -> None:
         
@@ -24,39 +24,16 @@ class Mask(BaseImage["Mask"]):
         super().__init__(image, **params)
         
         # Ensures all masks are Luminance channel only
-        self.image = self.image.convert('L')
+        self._image = self._image.convert('L')
         
-        self.shape: Shapes = shape if shape is not None else 'ort'
-        self.edges: str = edges # .replace('x', '.') # TODO: autodetect
+        # self.edges: str = edges # .replace('x', '.') # TODO: autodetect
         
         # print("Mask.__init__")
     
     def __str__(self) -> str:
-        return f"MASK | size:{self.size} mode:{self.mode} shape:{self.shape} edges:{self.edges}"
+        return f"MASK | size:{self.size} mode:{self.mode}"
     
     # STATIC METHODS # ---------------------------------------------------------
-    @staticmethod
-    def _create_symmetrical_outline(
-            size: tuple[int, int],
-            lines: list[tuple[tuple[float]]],
-            fill: bool = True,
-            **params,
-        ) -> Image.Image:
-        
-        image = Image.new("L", size, 0)
-        draw  = ImageDraw.Draw(image)
-        
-        for line in lines:
-            draw.line(line, fill=255)
-        
-        image.paste(ImageOps.flip(image), mask=ImageOps.invert(image))
-        image.paste(ImageOps.mirror(image), mask=ImageOps.invert(image))
-        
-        if fill:
-            ImageDraw.floodfill(image, (size[0] / 2, size[1] / 2), 255)
-        
-        return image
-    
     @staticmethod
     def merge_masks(
             masks: Sequence["Mask"] | dict[str, "Mask"],
@@ -93,7 +70,7 @@ class Mask(BaseImage["Mask"]):
         ) -> Self:
         """Returns a deep copy but keeping the original parameters."""
         
-        params = dict(shape=self.shape, edges=self.edges, builder=self._builder)
+        params = dict(builder=self._builder)
         # print(f"Mask.copy_with_params:\n{params=}")
         return self._builder(image, **params)
     
@@ -101,23 +78,24 @@ class Mask(BaseImage["Mask"]):
     def invert(self) -> Self:
         """'invert' as in 'negative'"""
         
-        image = ImageOps.invert(self.image)
+        image = ImageOps.invert(self._image)
         
         return self.copy_with_params(image)
     
     # OUTPUTS
-    # FIXME: Should inherit somewhat
     def cutout(self,
             mask: "Mask",
         ) -> "Mask":
         """Think of 'cutout' as in 'cookie cutter'.  
         Cuts a Texture to generate a Tile.
+        
+        Always returns a Mask.
         """
         
-        image = self.image.copy()
-        image.putalpha(mask.image)
+        image = super().cutout(mask.image)
         
         return self.copy_with_params(image)
+    
 
 
 

@@ -3,37 +3,53 @@ if TYPE_CHECKING:
     from jabutiles.mask import Mask
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
 
-from jabutiles.configs import Shapes
+from jabutiles.mask import Mask
+# from jabutiles.base import BaseImage
+# from jabutiles.configs import Shapes
 from jabutiles.texture import Texture
+from jabutiles.tilegen import TileGen
 
 
 
 class Tile(Texture):
-    """A Tile is a Texture with a purpose and a shape.  
+    """A Tile is a Texture with a purpose.  
     Can be thought as the combination of Texture + Mask.
     """
     
     # DUNDERS # ----------------------------------------------------------------
     def __init__(self,
-            image: str | Image.Image | np.typing.NDArray = None,
-            shape: Shapes = None,
+            image: str | Image.Image | np.typing.NDArray,
+            mask: Mask = None,
             **params,
         ) -> None:
         
         params["builder"] = Tile
         super().__init__(image, **params)
         
-        # Ensures all tiles are full channel
-        self.image: Image.Image = self.image.convert('RGBA')
+        if mask is None:
+            mask = TileGen.gen_ort_mask(self.size)
         
-        self.shape: Shapes = shape if shape is not None else 'ort'
+        self.mask: Mask = mask
         
         # print("Tile.__init__")
     
     def __str__(self) -> str:
         return f"TILE | size:{self.size} mode:{self.mode} shape:{self.shape}"
+    
+    # PROPERTIES # -------------------------------------------------------------
+    @property
+    def image(self) -> Image.Image:
+        return super(Texture, self).cutout(self.mask._image)
+    
+    @property
+    def shape(self) -> str:
+        return self.mask.shape
+    
+    @property
+    def edges(self) -> str:
+        return self.mask.edges
     
     # STATIC METHODS # ---------------------------------------------------------
     @staticmethod
@@ -64,15 +80,13 @@ class Tile(Texture):
             image = Image.new('RGBA', FIRST[0].size, (0, 0, 0, 0))
         
         # Iterative pasting
-        shape: Shapes = "ort"
         for tile, mask in tiles[start_at:end_at]:
             image.paste(tile.image, mask=mask.image)
-            shape = mask.shape
         
-        tile = Tile(image, shape)
+        tile = Tile(image)
         
         if last_is_cut:
-            tile = tile.cutout(LAST[1])
+            tile.mask = LAST[1]
         
         return tile
     

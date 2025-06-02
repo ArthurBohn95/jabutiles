@@ -129,18 +129,20 @@ class TileGen:
         if isinstance(gap_size, int)  : gap_size   = (gap_size, gap_size)
         
         # Constants
-        MW, MH = mask_size  # Mask Width and Height
-        BW, BH = brick_size # Brick Width and Height
-        GW, GH = gap_size   # Gap Width and Height
+        MW, MH = mask_size      # Mask Width and Height
+        BW, BH = brick_size     # Brick Width and Height
+        GW, GH = gap_size       # Gap Width and Height
         
-        BTW = BW + GW       # Brick Template Width
-        BTH = BH + GH       # Brick Template Height
-        BRW = MW + 2*(BW+GW)# Brick Row Width
-        BRH = BH + GH       # Brick Row Height
+        HBW = BW // 2           # Half Brick Width
+        BTW = BW + GW           # Brick Template Width
+        BTH = BH + GH           # Brick Template Height
+        BRW = MW + 2*(BW + GW)  # Brick Row Width
+        BRH = BH + GH           # Brick Row Height
         
-        HBW = BW//2         # Half Brick Width
-        if row_offset is None: row_offset = HBW
-        else:                  row_offset %= BTW
+        if row_offset is None:
+            row_offset = BTW // 2
+        else:
+            row_offset %= BTW
         
         GOX = (GW - 0.5) // 2   # Gap Offset on x-axis
         GOY = (GH - 0.5) // 2   # Gap Offset on y-axis

@@ -4,18 +4,30 @@ import random as rnd
 import numpy as np
 from PIL import Image, ImageOps, ImageFilter
 
-from jabutiles.utils import coalesce, clamp
-# from jabutiles.configs import MIRRORS, ROTATIONS
+from new_struct.utils import coalesce
+from new_struct.utils_img import get_outline
+from new_struct.configs import Rotation, Reflection, REFLECTIONS
 
 
 
 B = TypeVar('B', bound='BaseImage')
 class BaseImage(Generic[B]):
+    """A Base form of the PIL.Image.
+    Encapsulates methods used by tilers.
+    """
+    
     # DUNDERS # ----------------------------------------------------------------
     def __init__(self,
             image: str | Image.Image | np.typing.NDArray = None,
             **params,
         ) -> None:
+        """
+        Can receive an Image:
+            - From a path (str)
+            - From another Image (copy)
+            - From raw data (np.array)
+        """
+        # print("BaseImage.__init__")
         
         self._builder = params.get("builder", BaseImage)
         self._image: Image.Image
@@ -33,8 +45,6 @@ class BaseImage(Generic[B]):
             # A magenta pixel
             self._image = Image.new('RGB', (1, 1), (255, 0, 255))
             # raise Exception(f"wtf")
-        
-        # print("BaseImage.__init__")
     
     def __str__(self) -> str:
         return f"BASE | size:{self.size} mode:{self.mode}"
@@ -86,7 +96,7 @@ class BaseImage(Generic[B]):
         return self._builder(self._image.copy(), builder=self._builder)
     
     def copy_with_params(self,
-            image: Image,
+            image: Image.Image,
         ) -> B:
         """Returns a deep copy but keeping the original parameters."""
         
@@ -104,8 +114,8 @@ class BaseImage(Generic[B]):
         self.image.save(path)
     
     # IMAGE OPERATIONS
-    def rotate(self,
-            angle: int = None,
+    def rotate(self, # VALIDATED
+            angle: Rotation,
             expand: bool = True,
         ) -> B:
         """Rotates the Image counter clockwise.
@@ -118,15 +128,15 @@ class BaseImage(Generic[B]):
             The rotated Image
         """
         
-        if angle is None:
+        if angle == 0:
             return self
         
         image = self._image.rotate(int(angle), expand=expand)
         
         return self.copy_with_params(image)
     
-    def mirror(self,
-            axis: Literal['x', 'y', 'p', 'n'] = None,
+    def reflect(self, # VALIDATED
+            axis: Reflection,
         ) -> B:
         """Mirrors the Image in the horizontal, vertical or diagonal directions.  
         
@@ -141,7 +151,7 @@ class BaseImage(Generic[B]):
             The mirrored Image.
         """
         
-        if axis is None:
+        if axis not in REFLECTIONS:
             return self
         
         match axis:
@@ -149,11 +159,10 @@ class BaseImage(Generic[B]):
             case 'y': image = ImageOps.mirror(self._image)
             case 'p': image = self._image.transpose(Image.Transpose.TRANSVERSE)
             case 'n': image = self._image.transpose(Image.Transpose.TRANSPOSE)
-            case _:   image = self._image.copy()
         
         return self.copy_with_params(image)
     
-    def scale(self,
+    def scale(self, # VALIDATED
             factor: float | tuple[float, float],
             resample: Image.Resampling = Image.Resampling.NEAREST,
         ) -> B:
@@ -173,7 +182,7 @@ class BaseImage(Generic[B]):
         
         return self.copy_with_params(image)
     
-    def crop(self,
+    def crop(self, # VALIDATED
             box: tuple[int, int, int, int],
         ) -> B:
         """Removes the border around the bounding box.  
@@ -183,7 +192,7 @@ class BaseImage(Generic[B]):
         
         return self.copy_with_params(image)
     
-    def take(self,
+    def take(self, # VALIDATED
             pos: tuple[int, int],
             size: tuple[int, int],
         ) -> B:
@@ -200,11 +209,14 @@ class BaseImage(Generic[B]):
         
         return self.copy_with_params(crop)
     
-    def offset(self,
-            offset: tuple[int, int],
-            how: Literal['wrap', 'bleed'] = None,
+    def offset(self, # VALIDATED
+            offset: int | tuple[int, int],
+            how: Literal[None, 'wrap', 'bleed'] = None,
         ) -> B:
         """'Slides' the texture by the offset amount."""
+        
+        if isinstance(offset, int):
+            offset = offset, offset
         
         match how:
             case "wrap":
@@ -227,7 +239,7 @@ class BaseImage(Generic[B]):
                 
                 return self.copy_with_params(image)
     
-    def bleed(self,
+    def bleed(self, # VALIDATED
             pad: int = 0,
         ) -> B:
         """A special type of padding, where the edge pixels are repeated"""
@@ -245,15 +257,17 @@ class BaseImage(Generic[B]):
         
         return self.copy_with_params(image)
     
-    def smooth(self,
+    def smooth(self, # VALIDATED
             level: int = 1,
             wrap: bool = True,
             pad: int = 4,
         ) -> B:
         
         FILTERS = {
-            -1: ImageFilter.SHARPEN,    1: ImageFilter.SMOOTH,
-            2: ImageFilter.SMOOTH_MORE, 3: ImageFilter.BLUR,
+            -1: ImageFilter.SHARPEN,
+            1 : ImageFilter.SMOOTH,
+            2 : ImageFilter.SMOOTH_MORE,
+            3 : ImageFilter.BLUR,
         }
         
         if level not in FILTERS:
@@ -277,34 +291,13 @@ class BaseImage(Generic[B]):
         
         return self.copy_with_params(image)
     
-    def filter(self,
-            filters: ImageFilter.Filter | list[ImageFilter.Filter],
-            pad: int = 4,
-        ) -> B:
-        
-        w, h = self.size
-        
-        # Pads the image with itself to avoid filter bleeding
-        image = self.take((w-pad, h-pad), (w+pad*2, h+pad*2)).image
-        
-        filters = coalesce(filters, list)
-        for f in filters:
-            image = image.filter(f)
-        
-        # Crops the extra border, restoring the original size
-        image = ImageOps.crop(image, pad)
-        
-        return self.copy_with_params(image)
-    
     # ADVANCED OPERATIONS
-    def outline(self,
+    def outline(self, # VALIDATED
             thickness: float = 1.0,
             color: str | tuple[int, int, int] = "white",
             combine: bool = True,
             dist: float = 1.0,
         ) -> B:
-        
-        from jabutiles.utils_img import get_outline
         
         base_image = self.image.copy()
         outline = get_outline(base_image, thickness, color, dist)
@@ -314,7 +307,7 @@ class BaseImage(Generic[B]):
         
         return self.copy_with_params(base_image)
     
-    def repeat(self,
+    def repeat(self, # VALIDATED
             size: tuple[int, int],
             mirrors: list[str] = None,
             rotations: list[int] = None,
@@ -335,7 +328,7 @@ class BaseImage(Generic[B]):
                 r = rnd.choice(rotations)
                 m = rnd.choice(mirrors)
                 
-                image = self.rotate(r).mirror(m).image
+                image = self.rotate(r).reflect(m).image
                 base.paste(image, (col, row))
         
         return self.copy_with_params(base)
