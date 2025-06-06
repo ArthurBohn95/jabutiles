@@ -1,7 +1,7 @@
 # `jabutiles`
 A 2D procedural Tile operations library for python.
 
-![Jabutiles Logo](examples/logox8.png)
+![Jabutiles Logo](docs/imgs/logo.png)
 
 Most of the backend is pillow (PIL fork), the rest is numpy.
 
