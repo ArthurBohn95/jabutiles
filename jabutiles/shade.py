@@ -2,8 +2,8 @@ from typing import Literal
 
 from PIL import Image
 
-from new_struct.mask import Mask
-from new_struct.texture import Texture
+from jabutiles.mask import Mask
+from jabutiles.texture import Texture
 
 
 

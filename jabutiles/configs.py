@@ -1,229 +1,148 @@
-from typing import Literal
+"""
+"""
+
+from typing import Union, Literal
+
+import numpy as np
+from PIL import Image
 
 
 
-Shapes = Literal['ort', 'iso', 'hex.flat', 'hex.point']
-SHAPES: Shapes = ['ort', 'iso', 'hex.flat', 'hex.point']
+type ImageSource = Union[str, Image.Image, np.typing.NDArray]
 
-Mirrors = Literal['x', 'y', 'p', 'n']
-MIRRORS: Mirrors = ['x', 'y', 'p', 'n']
+type Shape = Literal[
+    'orthogonal',
+    'isometric',
+    'hexagonal.flat',
+    'hexagonal.point',
+]
+SHAPES: Shape = [
+    'orthogonal',
+    'isometric',
+    'hexagonal.flat',
+    'hexagonal.point',
+    'other',
+]
 
-Rotations = Literal[0, 90, 180, 270]
-ROTATIONS: Rotations = [0, 90, 180, 270]
+type Rotation = Literal[0, 90, 180, 270]
+ROTATIONS: Rotation = [0, 90, 180, 270]
 
-# Operation: rotation(angle), mirror(axis)
+type Reflection = Literal['x', 'y', 'p', 'n']
+REFLECTIONS: Reflection = ['x', 'y', 'p', 'n']
+
+type EdgeOp = Literal['rotation', 'reflection']
+EDGEOPS: EdgeOp = ['rotation', 'reflection']
+
+
+SHAPE_EDGE_SIZE: dict[Shape, int] = {
+    'orthogonal'     : 8,
+    'isometric'      : 8,
+    'hexagonal.flat' : 6,
+    'hexagonal.point': 6,
+}
+
+# Operation: rotation(angle), reflection(axis)
 # Value: angle or axis
-TILE_MOVE_PARAMS: dict[
-    Shapes, dict[
-        Literal["rotation", "mirror"], dict[
-            Rotations | Mirrors, tuple[
-                int, bool]
-            ]
-        ]
-    ] = {
-    # ORTHOGONAL SQUARE/RECTANGLE ---------------------------------
-    "ort": {
+SHAPE_EDGE_INFO: \
+    dict[Shape, dict[EdgeOp, dict[Rotation | Reflection, tuple[int, bool]]]] = {
+    # ORTHOGONAL (SQUARE) -----------------------------------------------------
+    "orthogonal": {
         # Rotation
         # | 0     | 90    | 180   | 270   |
         # | 1 2 3 | 3 4 5 | 5 6 7 | 7 8 1 |
-        # | 8 0 4 | 2 0 6 | 4 0 8 | 6 0 2 |
+        # | 8   4 | 2   6 | 4   8 | 6   2 |
         # | 7 6 5 | 1 8 7 | 3 2 1 | 5 4 3 |
-        # Mirror
-        # | 0     | 'y'   | 'x'   | 'p'   | 'n'   |
-        # | 1 2 3 | 3 2 1 | 7 6 5 | 5 4 3 | 1 8 7 |
-        # | 8 0 4 | 4 0 8 | 8 0 4 | 6 0 2 | 2 0 6 |
-        # | 7 6 5 | 5 6 7 | 1 2 3 | 7 8 1 | 3 4 5 |
+        # Reflection
+        # | 0     | 'x'   | 'y'   | 'p'   | 'n'   |
+        # | 1 2 3 | 7 6 5 | 3 2 1 | 5 4 3 | 1 8 7 |
+        # | 8   4 | 8   4 | 4   8 | 6   2 | 2   6 |
+        # | 7 6 5 | 1 2 3 | 5 6 7 | 7 8 1 | 3 4 5 |
         "rotation": {
-            0  : (+0, False),
+            0  : (+0, False), # Do Nothing
             90 : (-2, False), # (3, 4, 5, 6, 7, 8, 1, 2)
             180: (-4, False), # (5, 6, 7, 8, 1, 2, 3, 4)
             270: (+2, False), # (7, 8, 1, 2, 3, 4, 5, 6)
         },
-        "mirror": {
-            'y': (+3, True), # (3, 2, 1, 8, 7, 6, 5, 4)
-            'x': (-1, True), # (7, 6, 5, 4, 3, 2, 1, 8)
-            'p': (-3, True), # (5, 4, 3, 2, 1, 8, 7, 6)
-            'n': (+1, True), # (1, 8, 7, 6, 5, 4, 3, 2)
+        "reflection": {
+            'x': (-1, True),  # (7, 6, 5, 4, 3, 2, 1, 8)
+            'y': (+3, True),  # (3, 2, 1, 8, 7, 6, 5, 4)
+            'p': (-3, True),  # (5, 4, 3, 2, 1, 8, 7, 6)
+            'n': (+1, True),  # (1, 8, 7, 6, 5, 4, 3, 2)
         },
     },
     
-    # ISOMETRIC ---------------------------------------------------
-    "iso": {
+    # ISOMETRIC ---------------------------------------------------------------
+    "isometric": {
         # Rotation
         # | 0         | 90        | 180       | 270       |
         # |     1     |           |     5     |           |
         # |   8   2   |           |   4   6   |           |
-        # | 7   0   3 |     X     | 3   0   7 |     X     |
+        # | 7       3 |     X     | 3       7 |     X     |
         # |   6   4   |           |   2   8   |           |
         # |     5     |           |     1     |           |
-        # Mirror
-        # | 0         | 'y'       | 'x'       | 'p'       | 'n'       |
-        # |     1     |     1     |     5     |           |           |
-        # |   8   2   |   2   8   |   6   4   |           |           |
-        # | 7   0   3 | 3   0   7 | 7   0   3 |     X     |     X     |
-        # |   6   4   |   4   6   |   8   2   |           |           |
-        # |     5     |     5     |     1     |           |           |
+        # Reflection
+        # | 0         | 'x'       | 'y'       | 'p'       | 'n'       |
+        # |     1     |     5     |     1     |           |           |
+        # |   8   2   |   6   4   |   2   8   |           |           |
+        # | 7       3 | 7       3 | 3       7 |     X     |     X     |
+        # |   6   4   |   8   2   |   4   6   |           |           |
+        # |     5     |     1     |     5     |           |           |
         "rotation": {
+            0  : (+0, False), # Do Nothing
             180: (+4, False), # (5, 6, 7, 8, 1, 2, 3, 4)
         },
-        "mirror": {
-            'y': (+1, True), # (1, 8, 7, 6, 5, 4, 3, 2)
-            'x': (-3, True), # (5, 4, 3, 2, 1, 8, 7, 6)
+        "reflection": {
+            'x': (-3, True),  # (5, 4, 3, 2, 1, 8, 7, 6)
+            'y': (+1, True),  # (1, 8, 7, 6, 5, 4, 3, 2)
         },
     },
     
-    # HEXAGONAL ---------------------------------------------------
-    "hex.flat": {
+    # HEXAGONAL ---------------------------------------------------------------
+    "hexagonal.flat": {
         # FLAT
         # Rotation
         # | 0     | 90    | 180   | 270   |
         # |  1 2  |       |  4 5  |       |
-        # | 6 0 3 |   X   | 3 0 6 |   X   |
+        # | 6   3 |   X   | 3   6 |   X   |
         # |  5 4  |       |  2 1  |       |
-        # Mirror
-        # | 0     | 'y'   | 'x'   | 'p'   | 'n'   |
-        # |  1 2  |  2 1  |  5 4  |       |       |
-        # | 6 0 3 | 3 0 6 | 6 0 3 |   X   |   X   |
-        # |  5 4  |  4 5  |  1 2  |       |       |
+        # Reflection
+        # | 0     | 'x'   | 'y'   | 'p'   | 'n'   |
+        # |  1 2  |  5 4  |  2 1  |       |       |
+        # | 6   3 | 6   3 | 3   6 |   X   |   X   |
+        # |  5 4  |  1 2  |  4 5  |       |       |
         "rotation": {
+            0  : (+0, False), # Do Nothing
             180: (+3, False), # (4, 5, 6, 1, 2, 3)
         },
-        "mirror": {
-            'y': (+2, True), # (2, 1, 6, 5, 4, 3)
-            'x': (-1, True), # (5, 4, 3, 2, 1, 6)
+        "reflection": {
+            'x': (-1, True),  # (5, 4, 3, 2, 1, 6)
+            'y': (+2, True),  # (2, 1, 6, 5, 4, 3)
         },
     },
     
-    "hex.point": {
+    "hexagonal.point": {
         # POINT
         # Rotation
         # | 0     | 90    | 180   | 270   |
         # |   1   |       |   4   |       |
-        # | 6 0 2 |   X   | 3 0 5 |   X   |
+        # | 6   2 |   X   | 3   5 |   X   |
         # | 5   3 |       | 2   6 |       |
         # |   4   |       |   1   |       |
-        # Mirror
-        # | 0     | 'y'   | 'x'   | 'p'   | 'n'   |
-        # |   1   |   1   |   4   |       |       |
-        # | 6 0 2 | 2 0 6 | 5 0 3 |   X   |   X   |
-        # | 5   3 | 3   4 | 6   2 |       |       |
-        # |   4   |   4   |   1   |       |       |
+        # Reflection
+        # | 0     | 'x'   | 'y'   | 'p'   | 'n'   |
+        # |   1   |   4   |   1   |       |       |
+        # | 6   2 | 5   3 | 2   6 |   X   |   X   |
+        # | 5   3 | 6   2 | 3   4 |       |       |
+        # |   4   |   1   |   4   |       |       |
         "rotation": {
+            0  : (+0, False), # Do Nothing
             180: (+3, False), # (4, 5, 6, 1, 2, 3)
         },
-        "mirror": {
-            'y': (+1, True), # (1, 6, 5, 4, 3, 2)
-            'x': (-2, True), # (4, 3, 2, 1, 6, 5)
+        "reflection": {
+            'x': (-2, True),  # (4, 3, 2, 1, 6, 5)
+            'y': (+1, True),  # (1, 6, 5, 4, 3, 2)
         },
     },
 }
 
-
-
-# Operation: rotation(angle), mirror(axis)
-# Value: angle or axis
-SHAPE_EDGE_INFO: dict[
-    Shapes, dict[
-        Literal["rotation", "mirror"], dict[
-            Rotations | Mirrors, tuple[
-                int, bool]
-            ]
-        ]
-    ] = {
-    
-    # ORTHOGONAL SQUARE/RECTANGLE ---------------------------------
-    "ort": {
-        # Rotation
-        # | 0     | 90    | 180   | 270   |
-        # | 1 2 3 | 3 4 5 | 5 6 7 | 7 8 1 |
-        # | 8 0 4 | 2 0 6 | 4 0 8 | 6 0 2 |
-        # | 7 6 5 | 1 8 7 | 3 2 1 | 5 4 3 |
-        # Mirror
-        # | 0     | 'y'   | 'x'   | 'p'   | 'n'   |
-        # | 1 2 3 | 3 2 1 | 7 6 5 | 5 4 3 | 1 8 7 |
-        # | 8 0 4 | 4 0 8 | 8 0 4 | 6 0 2 | 2 0 6 |
-        # | 7 6 5 | 5 6 7 | 1 2 3 | 7 8 1 | 3 4 5 |
-        "rotation": {
-            90 : (-2, False), # (3, 4, 5, 6, 7, 8, 1, 2)
-            180: (-4, False), # (5, 6, 7, 8, 1, 2, 3, 4)
-            270: (+2, False), # (7, 8, 1, 2, 3, 4, 5, 6)
-        },
-        "mirror": {
-            'y': (+3, True), # (3, 2, 1, 8, 7, 6, 5, 4)
-            'x': (-1, True), # (7, 6, 5, 4, 3, 2, 1, 8)
-            'p': (-3, True), # (5, 4, 3, 2, 1, 8, 7, 6)
-            'n': (+1, True), # (1, 8, 7, 6, 5, 4, 3, 2)
-        },
-    },
-    
-    # ISOMETRIC ---------------------------------------------------
-    "iso": {
-        # Rotation
-        # | 0         | 90        | 180       | 270       |
-        # |     1     |           |     5     |           |
-        # |   8   2   |           |   4   6   |           |
-        # | 7   0   3 |     X     | 3   0   7 |     X     |
-        # |   6   4   |           |   2   8   |           |
-        # |     5     |           |     1     |           |
-        # Mirror
-        # | 0         | 'y'       | 'x'       | 'p'       | 'n'       |
-        # |     1     |     1     |     5     |           |           |
-        # |   8   2   |   2   8   |   6   4   |           |           |
-        # | 7   0   3 | 3   0   7 | 7   0   3 |     X     |     X     |
-        # |   6   4   |   4   6   |   8   2   |           |           |
-        # |     5     |     5     |     1     |           |           |
-        "rotation": {
-            180: (+4, False), # (5, 6, 7, 8, 1, 2, 3, 4)
-        },
-        "mirror": {
-            'y': (+1, True), # (1, 8, 7, 6, 5, 4, 3, 2)
-            'x': (-3, True), # (5, 4, 3, 2, 1, 8, 7, 6)
-        },
-    },
-    
-    # HEXAGONAL ---------------------------------------------------
-    "hex.flat": {
-        # FLAT
-        # Rotation
-        # | 0     | 90    | 180   | 270   |
-        # |  1 2  |       |  4 5  |       |
-        # | 6 0 3 |   X   | 3 0 6 |   X   |
-        # |  5 4  |       |  2 1  |       |
-        # Mirror
-        # | 0     | 'y'   | 'x'   | 'p'   | 'n'   |
-        # |  1 2  |  2 1  |  5 4  |       |       |
-        # | 6 0 3 | 3 0 6 | 6 0 3 |   X   |   X   |
-        # |  5 4  |  4 5  |  1 2  |       |       |
-        "rotation": {
-            180: (+3, False), # (4, 5, 6, 1, 2, 3)
-        },
-        "mirror": {
-            'y': (+2, True), # (2, 1, 6, 5, 4, 3)
-            'x': (-1, True), # (5, 4, 3, 2, 1, 6)
-        },
-    },
-    
-    "hex.point": {
-        # POINT
-        # Rotation
-        # | 0     | 90    | 180   | 270   |
-        # |   1   |       |   4   |       |
-        # | 6 0 2 |   X   | 3 0 5 |   X   |
-        # | 5   3 |       | 2   6 |       |
-        # |   4   |       |   1   |       |
-        # Mirror
-        # | 0     | 'y'   | 'x'   | 'p'   | 'n'   |
-        # |   1   |   1   |   4   |       |       |
-        # | 6 0 2 | 2 0 6 | 5 0 3 |   X   |   X   |
-        # | 5   3 | 3   4 | 6   2 |       |       |
-        # |   4   |   4   |   1   |       |       |
-        "rotation": {
-            180: (+3, False), # (4, 5, 6, 1, 2, 3)
-        },
-        "mirror": {
-            'y': (+1, True), # (1, 6, 5, 4, 3, 2)
-            'x': (-2, True), # (4, 3, 2, 1, 6, 5)
-        },
-    },
-}
 

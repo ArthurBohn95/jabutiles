@@ -1,103 +1,112 @@
-from typing import Self, TYPE_CHECKING
+from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from jabutiles.mask import Mask
+    from jabutiles.shade import Shade
 
-import numpy as np
 from PIL import Image, ImageOps
 
-from jabutiles.mask import Mask
-# from jabutiles.base import BaseImage
-# from jabutiles.configs import Shapes
+from jabutiles.mask import Mask, ShapeMask
+from jabutiles.layer import Layer
 from jabutiles.texture import Texture
-from jabutiles.tilegen import TileGen
+from jabutiles.utils_img import cut_image, display_image
 
 
 
-class Tile(Texture):
-    """A Tile is a Texture with a purpose.  
-    Can be thought as the combination of Texture + Mask.
-    """
+class Tile:
+    """"""
     
-    # DUNDERS # ----------------------------------------------------------------
+    # DUNDERS # ---------------------------------------------------------------
     def __init__(self,
-            image: str | Image.Image | np.typing.NDArray,
-            mask: Mask = None,
+            layers: list["Layer"],
             **params,
         ) -> None:
         
-        params["builder"] = Tile
-        super().__init__(image, **params)
-        
-        if mask is None:
-            mask = TileGen.gen_ort_mask(self.size)
-        
-        self.mask: Mask = mask
-        
-        # print("Tile.__init__")
+        self._layers: list["Layer"] = list(layers)
+        self.__cache: Image.Image = None
+    
+    def __len__(self) -> int:
+        return len(self._layers)
     
     def __str__(self) -> str:
-        return f"TILE | size:{self.size} mode:{self.mode} shape:{self.shape}"
+        s = f"TILE | size:{len(self)}"
+        for l in self._layers:
+            s += f"\n  > {l}"
+        return s
     
-    # PROPERTIES # -------------------------------------------------------------
+    # PROPERTIES # ------------------------------------------------------------
+    @property
+    def size(self) -> tuple[int, int]:
+        return self._layers[0].size
+    
     @property
     def image(self) -> Image.Image:
-        return super(Texture, self).cutout(self.mask._image)
+        if self.__cache is not None:
+            print(f"Using cached image")
+            return self.__cache
+        
+        if len(self._layers) == 1:
+            return self._layers[0].image
+        
+        last_is_shape: bool = self._layers[-1].subtype == "mask"
+        last_layer: int = len(self)
+        if last_is_shape:
+            last_layer -= 1
+        
+        image = Image.new("RGB", self.size, (0, 0, 0))
+        
+        for idx in range(0, last_layer):
+            layer: "Layer" = self._layers[idx]
+            
+            shade = layer.on_other
+            if shade is not None:
+                image = shade.stamp(Texture(image), layer.mask).image
+            
+            image.paste(layer.image, mask=layer.mask.image)
+        
+        if last_is_shape:
+            image = cut_image(image, self._layers[-1].mask.image)
+        
+        self.__cache = image
+        
+        return image
     
-    @property
-    def shape(self) -> str:
-        return self.mask.shape
-    
-    @property
-    def edges(self) -> str:
-        return self.mask.edges
-    
-    # STATIC METHODS # ---------------------------------------------------------
-    @staticmethod
-    def merge_tiles(*tiles: tuple["Texture", "Mask"]) -> "Tile":
-        """
-        tiles = [(tile, mask), (tile, mask), ...]
-        """
-        assert len(tiles) >= 2
-        
-        FIRST: tuple["Texture", "Mask"] = tiles[0]
-        LAST: tuple["Texture", "Mask"] = tiles[-1]
-        
-        first_no_mask: bool = FIRST[1] is None
-        last_is_cut: bool = LAST[0] is None
-        
-        start_at: int = 0
-        end_at: int = len(tiles)
-        
-        # If the last tuple is just the mask, do the cutout
-        if last_is_cut:
-            end_at = end_at - 1
-        
-        if first_no_mask: # The first texture is used in full
-            start_at = 1
-            image = tiles[0][0].image.copy()
-        
-        else: # A black template is used
-            image = Image.new('RGBA', FIRST[0].size, (0, 0, 0, 0))
-        
-        # Iterative pasting
-        for tile, mask in tiles[start_at:end_at]:
-            image.paste(tile.image, mask=mask.image)
-        
-        tile = Tile(image)
-        
-        if last_is_cut:
-            tile.mask = LAST[1]
-        
-        return tile
-    
-    # METHODS # ----------------------------------------------------------------
+    # METHODS # ---------------------------------------------------------------
     # BASIC INTERFACES
-    def copy_with_params(self,
-            image: Image,
-        ) -> Self:
-        """Returns a deep copy but keeping the original parameters."""
+    def display(self,
+            factor: float = 1.0,
+            resample: Image.Resampling = Image.Resampling.NEAREST,
+        ) -> None:
+        """Displays the Image on a python notebook."""
         
-        params = dict(shape=self.shape, builder=self._builder)
-        # print(f"Mask.copy_with_params:\n{params=}")
-        return self._builder(image, **params)
+        display(ImageOps.scale(self.image, factor, resample)) # type: ignore
+    
+    # BASIC OPERATIONS
+    def set_base(self,
+            base: "Texture",
+        ) -> None:
+        
+        # Clears any previous base layer
+        if self._layers[0].subtype in ('base', 'full'):
+            self._layers.pop(0)
+        
+        # Adds it at the front
+        self._layers.insert(0, Layer(base))
+        
+        # Resets cache
+        self.__cache = None
+    
+    def set_shape(self,
+            mask: "ShapeMask",
+        ) -> None:
+        
+        assert isinstance(mask, ShapeMask), "Mask is not a shape type"
+        
+        # Clears any previous shape layer
+        if self._layers[-1].subtype == "mask":
+            self._layers.pop(-1)
+        
+        # Adds it at the end
+        self._layers.append(Layer(None, mask))
+        
+        # Resets cache
+        self.__cache = None
     

@@ -5,9 +5,9 @@ from typing import Any, Literal, Sequence
 import numpy as np
 from PIL import Image, ImageOps, ImageDraw
 
-from new_struct.mask import Mask, ShapeMask, EdgeMask
-from new_struct.utils import snap
-from new_struct.utils_img import make_symmetrical_outline, fanout
+from jabutiles.mask import Mask, ShapeMask, EdgeMask
+from jabutiles.utils import snap
+from jabutiles.utils_img import make_symmetrical_outline, fanout
 
 
 

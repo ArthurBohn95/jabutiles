@@ -176,3 +176,5 @@ cython_debug/
 # Custom ignores
 trash/
 *.ipynb
+.vscode/
+*.key

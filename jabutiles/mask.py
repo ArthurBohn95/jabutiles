@@ -1,69 +1,40 @@
-from typing import Self, Sequence
+from typing import Self, TYPE_CHECKING
+if TYPE_CHECKING:
+    from jabutiles.texture import Texture
 
-import numpy as np
-from PIL import Image, ImageOps, ImageDraw #, ImageChops, ImageFilter, ImageEnhance
+from PIL import Image, ImageOps
 
 from jabutiles.base import BaseImage
-from jabutiles.utils import combine_choices
-from jabutiles.configs import Shapes
+from jabutiles.configs import (
+    Shape, Rotation, Reflection, ImageSource,
+    SHAPES, ROTATIONS, REFLECTIONS, SHAPE_EDGE_INFO, SHAPE_EDGE_SIZE
+)
+from jabutiles.utils import shift_string, combine_choices
+from jabutiles.utils_img import cut_image
 
 
 
 class Mask(BaseImage["Mask"]):
-    """A Mask is a special 'Tile' with a shape and orientation"""
+    """A Mask is a greyscale alpha image"""
     
-    # DUNDERS # ----------------------------------------------------------------
+    # DUNDERS # ---------------------------------------------------------------
     def __init__(self,
-            image: str | Image.Image | np.typing.NDArray = None,
-            # shape: Shapes = None,
-            # edges: str = None,
+            image: ImageSource = None,
             **params,
         ) -> None:
         
-        params["builder"] = Mask
+        params.setdefault("builder", Mask)
         super().__init__(image, **params)
         
         # Ensures all masks are Luminance channel only
-        self._image = self._image.convert('L')
-        
-        # self.edges: str = edges # .replace('x', '.') # TODO: autodetect
+        self._image: Image.Image = self._image.convert('L')
         
         # print("Mask.__init__")
     
     def __str__(self) -> str:
         return f"MASK | size:{self.size} mode:{self.mode}"
     
-    # STATIC METHODS # ---------------------------------------------------------
-    @staticmethod
-    def merge_masks(
-            masks: Sequence["Mask"] | dict[str, "Mask"],
-            **params,
-        ) -> "Mask":
-        
-        assert len(masks) >= 2, "Insufficient masks to be merged (<2)"
-        
-        if isinstance(masks, Sequence):
-            base = masks[0].as_array
-            
-            for mask in masks[1:]:
-                base |= mask.as_array
-            
-            return Mask(base, masks[-1].shape)
-        
-        if isinstance(masks, dict):
-            mask_data = masks.copy()
-            base_edge, base_mask = mask_data.popitem()
-            
-            # Iterates and combines them
-            for edge, mask in mask_data.items():
-                base_edge = combine_choices(base_edge, edge)
-                base_mask = Mask.merge_masks([base_mask, mask])
-            
-            return base_edge, base_mask
-        
-        return None
-    
-    # METHODS # ----------------------------------------------------------------
+    # METHODS # ---------------------------------------------------------------
     # BASIC INTERFACES
     def copy_with_params(self,
             image: Image,
@@ -71,10 +42,9 @@ class Mask(BaseImage["Mask"]):
         """Returns a deep copy but keeping the original parameters."""
         
         params = dict(builder=self._builder)
-        # print(f"Mask.copy_with_params:\n{params=}")
         return self._builder(image, **params)
     
-    # IMAGE OPERATIONS
+    # EXPANDED OPERATIONS
     def invert(self) -> Self:
         """'invert' as in 'negative'"""
         
@@ -82,22 +52,192 @@ class Mask(BaseImage["Mask"]):
         
         return self.copy_with_params(image)
     
-    # OUTPUTS
-    def cutout(self,
-            mask: "Mask",
-        ) -> "Mask":
-        """Think of 'cutout' as in 'cookie cutter'.  
-        Cuts a Texture to generate a Tile.
+    def merge(self,
+            other: "Mask",
+        ) -> Self:
         
-        Always returns a Mask.
-        """
+        assert self.size == other.size, \
+            f"Incompatible mask sizes: {self.size=} vs {other.size=}"
         
-        image = super().cutout(mask.image)
+        base = self.as_array
+        base |= other.as_array
         
-        return self.copy_with_params(image)
+        return self.copy_with_params(base)
     
+    def diff(self, other: "Mask") -> "Mask":
+        """The opposite of merge"""
+        
+        return self.merge(other.invert()).invert()
+    
+    # OUTPUT
+    def cut(self,
+            texture: "Texture",
+        ) -> Image.Image:
+        """Uses the mask to cut the texture. Returns an Image."""
+        
+        return cut_image(texture.image, self.image)
 
 
 
-class MaskGen:
-    pass
+class ShapeMask(Mask):
+    """A ShapeMask is a greyscale alpha image for defining Tile shapes"""
+    
+    # DUNDERS # ---------------------------------------------------------------
+    def __init__(self,
+            image: ImageSource = None,
+            shape: Shape = None,
+            **params,
+        ) -> None:
+        
+        params.setdefault("builder", ShapeMask)
+        super().__init__(image, **params)
+        
+        assert shape in SHAPES, f"Unknown shape: {shape}"
+        self._shape: Shape = shape
+    
+    def __str__(self) -> str:
+        return f"SHAPEMASK | size:{self.size} mode:{self.mode} shape:{self.shape}"
+    
+    # PROPERTIES # ------------------------------------------------------------
+    @property
+    def shape(self) -> Shape:
+        return self._shape
+    
+    # METHODS # ---------------------------------------------------------------
+    # BASIC INTERFACES
+    def copy_with_params(self,
+            image: Image,
+        ) -> Self:
+        """Returns a deep copy but keeping the original parameters."""
+        
+        params = dict(builder=self._builder, shape=self.shape)
+        
+        return self._builder(image, **params)
+    
+    def can_rotate(self,
+            angle: Rotation,
+        ) -> bool:
+        
+        if angle not in ROTATIONS:
+            return False
+        
+        return angle in SHAPE_EDGE_INFO[self.shape]['rotation']
+    
+    def can_reflect(self,
+            axis: Reflection,
+        ) -> bool:
+        
+        if axis not in REFLECTIONS:
+            return False
+        
+        return axis in SHAPE_EDGE_INFO[self.shape]['reflection']
+    
+    # BASIC OPERATIONS # ------------------------------------------------------
+    def rotate(self,
+            angle: Rotation,
+            expand: bool = True,
+        ) -> Self:
+        
+        if not self.can_rotate(angle):
+            print(f"No rotation")
+            return self
+        
+        return super().rotate(angle, expand)
+    
+    def reflect(self,
+            axis: Reflection,
+        ) -> Self:
+        
+        if not self.can_reflect(axis):
+            print(f"No reflection")
+            return self
+        
+        return super().reflect(axis)
+
+
+
+class EdgeMask(ShapeMask):
+    """An EdgeMask is a greyscale alpha image for border interaction"""
+    
+    # DUNDERS # ---------------------------------------------------------------
+    def __init__(self,
+            image: ImageSource = None,
+            shape: Shape = None,
+            edges: str = None,
+            **params,
+        ) -> None:
+        
+        assert shape in SHAPES, f"Unknown shape: {shape}"
+        assert len(edges) == SHAPE_EDGE_SIZE[shape], f"Unknown edges: {edges}"
+        
+        params.setdefault("builder", EdgeMask)
+        super().__init__(image, shape, **params)
+        
+        self._edges: str = edges
+    
+    def __str__(self) -> str:
+        return f"SHAPEMASK | size:{self.size} mode:{self.mode}"\
+            f" shape:{self.shape} edges:{self.edges}"
+    
+    # PROPERTIES # ------------------------------------------------------------
+    @property
+    def edges(self) -> str:
+        return self._edges
+    
+    # METHODS # ---------------------------------------------------------------
+    # BASIC INTERFACES
+    def copy_with_params(self,
+            image: Image,
+        ) -> Self:
+        """Returns a deep copy but keeping the original parameters."""
+        
+        params = dict(builder=self._builder, shape=self.shape, edges=self.edges)
+        
+        return self._builder(image, **params)
+    
+    # BASIC OPERATIONS # ------------------------------------------------------
+    def rotate(self,
+            angle: Rotation,
+            expand: bool = True,
+        ) -> Self:
+        
+        if not self.can_rotate(angle):
+            return self
+        
+        params = SHAPE_EDGE_INFO[self.shape]["rotation"]
+        
+        result = super().rotate(angle, expand)
+        result._edges = shift_string(self.edges, *params)
+        
+        return result
+    
+    def reflect(self,
+            axis: Reflection,
+        ) -> Self:
+        
+        if not self.can_reflect(axis):
+            return self
+        
+        params = SHAPE_EDGE_INFO[self.shape]["reflection"]
+        
+        result = super().reflect(axis)
+        result._edges = shift_string(self._edges, *params)
+        
+        return result
+    
+    # EXPANDED OPERATIONS
+    def merge(self,
+            other: "EdgeMask",
+        ) -> Self:
+        
+        assert self.size == other.size, \
+            f"Incompatible edge mask sizes: {self.size=} vs {other.size=}"
+        
+        assert self.shape == other.shape, \
+            f"Incompatible edge mask types: {self.shape=} vs {other.shape=}"
+        
+        result = super().merge(other)
+        result._edges = combine_choices(self.edges, other.edges)
+        
+        return result
+

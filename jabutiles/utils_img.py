@@ -34,6 +34,21 @@ def make_symmetrical_outline(
     return image
 
 
+def fanout(
+        image: Image.Image,
+        filled: bool = True,
+    ) -> Image.Image:
+    
+    base = image.copy()
+    base.paste(base.rotate(90, Image.Resampling.NEAREST), mask=ImageOps.invert(base))
+    base.paste(base.rotate(180, Image.Resampling.NEAREST), mask=ImageOps.invert(base))
+    
+    if filled:
+        ImageDraw.floodfill(base, (base.size[0] / 2, base.size[1] / 2), 255)
+    
+    return base
+
+
 def cut_image(
         image: Image.Image,
         mask: Image.Image,
