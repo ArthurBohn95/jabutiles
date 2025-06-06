@@ -1,11 +1,13 @@
-# TODO: Improve README
+# `jabutiles`
+A 2D procedural Tile operations library for python.
 
-# jabutiles
-A 2D Tile library for python.
+![Jabutiles Logo](examples/logox8.png)
 
 Most of the backend is pillow (PIL fork), the rest is numpy.
 
-<br> <br> <br> <br> <br>
+<br> <br> <br>
+
+
 
 # About the classes:
 
@@ -13,81 +15,105 @@ Most of the backend is pillow (PIL fork), the rest is numpy.
 
 This is the most basic class used by jabutiles.
 
-It is nothing more than a PIL.Image wrapped around functional style methods.  
-This means that each operation returns a copy of the class with the change.
+It is nothing more than a `PIL.Image` wrapped around functional style methods.  
+This means that each operation returns a copy with the applied change.
 
 It is not used directly, but inherited by the other core classes.  
-Provides most of the Image operations: rotation, mirroring, cropping, ...
+Provides most of the Image operations: rotation, reflection, cropping, ...
 
 <br>
 
 
-## `jabutiles.mask.Mask (BaseImage)`
+
+## `jabutiles.mask.Mask(BaseImage)`
 
 This class inherits from the BaseImage.
 
-It is used to represent a pure L mask.  
-Used as an alpha for a Texture or to overlay two Textures.
+It is used to represent a pure greyscale (`L mode`) mask.  
+Used as an alpha for a `Texture` or to overlay two `Texture`s.
 
-Can have additional components:
+Fully procedural.
 
-### `jabutiles.shape.Shape`
+Adds new methods.
 
-A class that defines what is the purpose of the Mask.
+Has two specialized children:
 
-It's used to govern rotation and reflection operations.
+
+
+### `jabutiles.mask.ShapeMask(Mask)`
+
+A special `Mask` that also defines the shape of the Mask.
+
+It's used to govern rotation and reflection operations, as well as the final `Tile` shape.
+
+Fully procedural.
 
 Can be:
-- `orthogonal`: square (GB/GBC/GBA Pokemon, Stardew Valley)
+- `orthogonal`: square (Pokemon up to GBA, Stardew Valley)
 - `isometric`: diamond (Age of Empires II, Diablo II)
-- `hexagonal`: both `flat` (?) and `point` (Heroes of Might and Magic III)
+- `hexagonal`: `.flat` (?) or `.point` (Heroes of Might and Magic III)
 
-### `jabutiles.edges.Edges`
 
-A class that governs how the Mask interacts with surrounding Masks.
 
-Adds new methods:
-- `invert`: Inverts the grayscale values (0 <-> 255)
+### `jabutiles.mask.EdgeMask(ShapeMask)`
+
+A special `ShapeMask` that also governs interactions with its surroundings.
+
+Partially procedural.
 
 <br>
 
-## `jabutiles.texture.Texture (BaseImage)`
+
+
+## `jabutiles.texture.Texture(BaseImage)`
 
 This class inherits from the BaseImage.
 
-It is used to represent pure RGB(A) visual data, such as a Texture.  
+It is used to represent pure RGB visual data.  
 Usually generated in-code or loaded from an image file.
 
-Adds new methods:
-
+Adds new methods.
 
 <br>
+
+
+
+## `jabutiles.shade.Shade`
+
+A collection of parameters to apply a "shadow" onto a `Texture`.
+
+The shape is controlled by a `Mask`.
+
+<br>
+
+
 
 ## `jabutiles.layer.Layer`
 
-A combination of a Texture and/or a Mask.  
-Must have at least one of them present.
+A combination of a `Texture`, a `Mask` and one/two `Shade`s.  
 
-If both exist, the Mask is the Texture's alpha.  
 If only Texture, it's regarded as a base Texture.  
-If only Mask, it's regarded as a Shape cutter.
+If only ShapeMask, it's regarded as a Shape cutter.  
+If both exist, the Mask is the Texture's alpha.  
 
 <br>
 
+
+
 ## `jabutiles.tile.Tile`
 
-A collection of Layers (at least one).  
-If only one layer, MUST contain a Texture.
+A collection of (at least one) `Layer`s.  
+If only one, it MUST contain a `Texture`.
 
 Usually follows this pattern:
 ```py
 [
-  (Texture, None),        # 1. Base Layer, the Texture is the base
-  (Texture, Mask),        # 2. Detail Layer, overlays information
-  ...                     # Mask has no Shape nor Edges, is usually a pattern
-  (Texture, Mask(Edges))  # 3. Edges Layer, defines how to interact with neighbours
-  ...                     # Can be more than one if surrounded by different Textures
-  (None,    Mask(Shape)), # 4. Shape Layer, defines the final appearance
+  Layer(Texture, None),           # 1. Base Layer, the Texture is the base
+  Layer(Texture, Mask, Shade),    # 2. Detail Layer, overlays information
+  ...                             #    Mask has no Shape nor Edges, is usually a pattern
+  Layer(Texture, EdgeMask, Shade) # 3. Edges Layer, defines how to interact with neighbours
+  ...                             #    Can be more than one if surrounded by different Textures
+  Layer(None,    ShapeMask),      # 4. Shape Layer, defines the final appearance
 ]
 ```
 
