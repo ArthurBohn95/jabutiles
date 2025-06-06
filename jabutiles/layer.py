@@ -80,10 +80,11 @@ class Layer:
         if self.texture is None:
             return self.mask.image
         
-        if self.on_self is not None:
-            return self.on_self.stamp(self.texture, self.mask).image
+        if self.on_self is None:
+            return self.mask.cut(self.texture)
         
-        return cut_image(self.texture.image, self.mask.image)
+        texture = self.on_self.stamp(self.texture, self.mask)
+        return self.mask.cut(texture)
     
     @property
     def size(self) -> tuple[int, int]:

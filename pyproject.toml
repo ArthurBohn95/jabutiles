@@ -1,6 +1,6 @@
 [project]
 name = "jabutiles"
-version = "0.0.5"
+version = "0.0.6"
 description = "A 2D procedural tile framework for games."
 
 authors = [
