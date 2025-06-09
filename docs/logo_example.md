@@ -48,7 +48,7 @@ mk3 = ShapeMaskGen.hexagonal(SIZE)                                         # A h
 
 ``` python
 # Shades
-sh1 = Shade(1/FORCE, (-1, +1), "wrap", inverted=True)   # Darker corner
+sh1 = Shade(1/FORCE, (-1, +1), "wrap", inverted=True)   # Bright corner
 sh2 = Shade(FORCE, (-1, +1), "wrap")                    # Brick shadow
 sh3 = Shade(FORCE, outline=2, dist=0.5, inverted=True)  # Enhance border
 sh4 = Shade(FORCE, outline=2)                           # Occlusion
@@ -76,7 +76,7 @@ ly4 = Layer(None, mk3)          # Hexagonal tile cut
 
 Shades are only cast during Layer interaction.  
 Ex: The bricks only cast a shadow on the dirt when overlaid.
-The only pior shadow is on the brick itself, a darker corner (`sh1`)
+The only prior shade is on the brick itself, a bright corner (`sh1`)
 
 # Tile
 
