@@ -82,7 +82,11 @@ curl -sS https://bootstrap.pypa.io/get-pip.py | python3.12
 sudo apt install python3.12-dev python3.12-venv
 ```
 
+Test with:
 
+``` bash
+python --version
+```
 
 ## 4.1. Venv creation
 
