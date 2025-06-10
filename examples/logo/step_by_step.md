@@ -1,5 +1,7 @@
 This is how the logo was generated.
 
+
+
 # Setup
 
 ``` python
@@ -18,6 +20,8 @@ SIZE  = (S, S)
 FORCE = 0.8     # Shade brightness
 ```
 
+
+
 # Textures
 
 ``` python
@@ -30,6 +34,8 @@ tx3 = TextureGen.named_texture(SIZE, "grass")
 | `tx1` | `tx2` | `tx3` |
 |-----|-----|-----|
 | ![tx1](imgs/tx1_dirt.png) | ![tx2](imgs/tx2_gravel.png) | ![tx3](imgs/tx3_grass.png) |
+
+
 
 # Masks
 
@@ -44,6 +50,8 @@ mk3 = ShapeMaskGen.hexagonal(SIZE)                                         # A h
 |-----|-----|-----|
 | ![mk1](imgs/mk1_brick.png) | ![mk2](imgs/mk2_blob.png) | ![mk3](imgs/mk3_shape.png) |
 
+
+
 # Shades
 
 ``` python
@@ -53,6 +61,14 @@ sh2 = Shade(FORCE, (-1, +1), "wrap")                    # Brick shadow
 sh3 = Shade(FORCE, outline=2, dist=0.5, inverted=True)  # Enhance border
 sh4 = Shade(FORCE, outline=2)                           # Occlusion
 ```
+
+Shades have no direct visual representation like `Texture`s and `Mask`s.  
+They are means of affecting an interaction between them.
+
+Ex: The bricks only cast a shadow on the dirt when overlaid.  
+The only prior shade is on the brick itself, a bright corner (`sh1`)
+
+
 
 # Layers
 
@@ -68,15 +84,14 @@ ly4 = Layer(None, mk3)          # Hexagonal tile cut
 |-----|-----|-----|-----|
 | ![ly1](imgs/ly1_dirt.png) | ![ly2](imgs/ly2_path.png) | ![ly3](imgs/ly3_growth.png) | ![mk3](imgs/mk3_shape.png) |
 
-## Interactions
+
+## Interactions (between Layers)
 
 | `ly1 + ly2` | `ly2 + ly3` | `ly1 + ly2 + ly3` |
 |-------------|-------------|-------------|
 | ![ly1_2](imgs/ly1_2.png) | ![ly2_3](imgs/ly2_3.png) | ![ly1_2_3](imgs/ly1_2_3.png) |
 
-Shades are only cast during Layer interaction.  
-Ex: The bricks only cast a shadow on the dirt when overlaid.
-The only prior shade is on the brick itself, a bright corner (`sh1`)
+
 
 # Tile
 
@@ -84,6 +99,8 @@ The only prior shade is on the brick itself, a bright corner (`sh1`)
 # Tile
 tl1 = Tile([ly1, ly2, ly3, ly4]) # All 4 layers combined
 ```
+
+
 
 # Final Result
 

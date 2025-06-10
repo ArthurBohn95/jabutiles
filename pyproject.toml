@@ -7,11 +7,11 @@ build-backend = "hatchling.build"
 # Technical Details
 [project]
 name = "jabutiles"
-version = "0.0.7"
+version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
     "pillow~=11.0.0", # for basic Image processing
-    "numpy~=2.2.6",   # for some array operations
+    "numpy>=2.2",   # for some array operations
 ]
 
 
@@ -19,11 +19,11 @@ dependencies = [
 description = "A 2D procedural tile framework for games."
 authors = [
     { name="Arthur L. Bohn" },
-    { name="Elvis F. Bugs" }, # windows tester
+    { name="Elvis F. Bugs" }, # tester (Windows)
 ]
 readme = "README.md"
 license = "MIT"
-license-files = ["LICEN[CS]E*"]
+license-files = ["LICENSE"]
 
 
 # Classification
@@ -33,6 +33,7 @@ keywords = [
     "arcade",
     "tiling",
     "autotiler",
+    "procedural",
     "brazil",
 ]
 classifiers = [
@@ -64,5 +65,6 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/ArthurBohn95/jabutiles"
-Issues = "https://github.com/ArthurBohn95/jabutiles/issues"
+repository = "https://github.com/ArthurBohn95/jabutiles.git"
+documentation = "https://github.com/ArthurBohn95/jabutiles/blob/main/docs/technical.md"
+issues = "https://github.com/ArthurBohn95/jabutiles/issues"
