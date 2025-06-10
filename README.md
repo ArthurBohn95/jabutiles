@@ -2,7 +2,7 @@
 
 A procedural Tileset interface for games.
 
-![Jabutiles Logo](https://github.com/ArthurBohn95/jabutiles/examples/logo/imgs/logo.png?raw=true)
+![Jabutiles Logo](https://github.com/ArthurBohn95/jabutiles/blob/main/examples/logo/imgs/logo.png?raw=true)
 
 Provides support for orthogonal, isometric and hexagonal tiles.
 

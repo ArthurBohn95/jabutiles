@@ -7,7 +7,7 @@ build-backend = "hatchling.build"
 # Technical Details
 [project]
 name = "jabutiles"
-version = "0.1.0"
+version = "0.1.1"
 requires-python = ">=3.11"
 dependencies = [
     "pillow~=11.0.0", # for basic Image processing
